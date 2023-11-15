@@ -1,0 +1,193 @@
+﻿@using Microsoft.AspNetCore.Mvc.TagHelpers
+@model List<CSVUploaderWebApp.DL.Models.ContactData>
+
+<form id="uploadForm" enctype="multipart/form-data">
+    <div class="form-group">
+        <label for="File">Choose CSV File:</label>
+        <input type="file" id="File" name="File" accept=".csv" class="form-control" required>
+    </div>
+    <button type="button" class="btn btn-primary" onclick="uploadFile()">Upload</button>
+</form>
+
+<table id="table" 
+       data-toggle="table"
+       data-pagination="true"
+       data-page-list="[5, 10, 20]"
+       data-search="true"
+       data-filter-control="true"
+       data-show-export="true"
+       data-click-to-select="true"
+       data-toolbar="#toolbar"
+       class="table-responsive table table-bordered table-striped">
+	<thead>
+	<tr>
+        <th data-field="name" name="Name" class="w-25" data-filter-control="input" data-sortable="true">Name</th>
+		<th data-field="dateOfBirth" name="DateOfBirth" class="w-25" data-filter-control="select" data-sortable="true">DateOfBirth</th>
+		<th data-field="married" name="Married" class="w-25" data-filter-control="select" data-sortable="true">Married</th>
+		<th data-field="phone" name="Phone" class="w-25" data-sortable="true">Phone</th>
+		<th data-field="salary" name="Salary" class="w-25" data-sortable="true">Salary</th>
+        <th></th>
+        <th></th>
+	</tr>
+	</thead>
+	<tbody>
+	
+	@foreach (var data in Model)
+	{
+		<tr data-id="@data.Id">
+            <td data-field="Name" data-filter-control="input" class="w-25">@data.Name</td>
+			<td data-field="DateOfBirth" data-filter-control="select" class="w-25" >@data.DateOfBirth.ToShortDateString()</td>
+			<td data-field="Married" data-filter-control="select" class="w-25">@data.Married</td>
+			<td data-field="Phone"  data-sortable="true" class="w-25">@data.Phone</td>
+			<td data-field="Salary"  data-sortable="true" class="w-25">@data.Salary</td>
+            <td>
+                <button class="btn btn-primary" onclick="editRow(@data.Id)">Edit</button>
+            </td>
+            <td>
+                <button class="btn btn-danger" onclick="deleteRow(@data.Id)">Delete</button>
+            </td>
+		</tr>
+	}
+	</tbody>
+</table>
+
+<script>
+    function showAlert(message) {
+        alert(message);
+    }
+
+    function deleteRow(id) {
+        if (confirm('Are you sure you want to delete this contact?')) {
+            $.ajax({
+                url: '@Url.Action("DeleteContact", "Data")/' + id,
+                type: 'DELETE',
+                success: function (data) {
+                    console.log('Contact deleted successfully', data);
+                    $('tr[data-id="' + id + '"]').remove();
+                },
+                error: function (xhr, status, error) {
+                    showAlert("An error occurred: " + xhr.responseJSON.error);
+                }
+            });
+        }
+    }
+
+    function editRow(id) {
+        const $row = $('tr[data-id="' + id + '"]');
+        $row.find('td:not(:last-child):not(:nth-last-child(2))').each(function () {
+            const value = $(this).text();
+            const fieldName = $(this).attr('data-field');
+    
+            if (fieldName === 'DateOfBirth') {
+                const parsedDate = moment(value).format('YYYY-MM-DD');
+                $(this).html('<input type="date" class="form-control datepicker" name="' + fieldName + '" value="' + parsedDate + '">');
+            } else if (fieldName === 'Married') {
+                const isChecked = value.toLowerCase() === 'true'; // Convert 'true' or 'false' to a boolean
+                $(this).html('<input type="checkbox" class="form-check-input m-0" name="' + fieldName + '" ' + (isChecked ? 'checked' : '') + '>');
+            } else {
+                $(this).html('<input type="text" class="form-control" name="' + fieldName + '" value="' + value + '">');
+            }
+        });
+    
+        $row.find('td:nth-last-child(2)').html('<button class="btn btn-success my-1" onclick="saveRow(' + id + ')">Save</button>' +
+            '<button class="btn btn-danger" onclick="cancelEditRow(' + id + ')">Cancel</button>');
+    }
+    
+    function saveRow(id) {
+        const $row = $('tr[data-id="' + id + '"]');
+        const formData = new FormData();
+    
+        formData.append('Id', id);
+        $row.find('input').each(function () {
+            const fieldName = $(this).attr('name');
+            const value = fieldName === 'Married' ? $(this).is(':checked') : $(this).val();
+            formData.append(fieldName, value);
+        });
+    
+        $.ajax({
+            url: '@Url.Action("UpdateContact", "Data")',
+            type: 'PUT',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(data) {
+                $row.find('td:not(:last-child)').each(function () {
+                    const value = $(this).find('input').is(':checkbox') 
+                    ? $(this).find('input').is(':checked') 
+                        ? 'True' : 'False'
+                    : $(this).find('input').val();
+                    $(this).html(value);
+                });
+    
+                $row.find('td:nth-last-child(2)').html('<button class="btn btn-primary" onclick="editRow(' + id + ')">Edit</button>');
+            },
+            error: function (xhr, status, error) {
+                showAlert("An error occurred: " + xhr.responseJSON.error);
+            }
+        });
+    }
+    
+    function cancelEditRow(id) {
+        const $row = $('tr[data-id="' + id + '"]');
+    
+        $row.find('td:not(:last-child)').each(function () {
+            const value = $(this).find('input').is(':checkbox') 
+                ? $(this).find('input').is(':checked') 
+                    ? 'True' : 'False'
+                : $(this).find('input').val();
+                $(this).html(value);
+        });
+    
+        $row.find('td:nth-last-child(2)').html('<button class="btn btn-primary" onclick="editRow(' + id + ')">Edit</button>');
+    }
+
+
+    function uploadFile() {
+        const formData = new FormData(document.getElementById('uploadForm'));
+    
+        $.ajax({
+            url: '@Url.Action("UploadFile", "Data")',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(data) {
+                showAlert("Success!");
+                window.location.reload();
+            },
+            error: function (xhr, status, error) {
+                showAlert("An error occurred: " + xhr.responseJSON.error);
+            }
+        });
+    }
+ 
+	const $table = $('#table');
+    $(function () {
+        $('#toolbar').find('select').change(function () {
+            $table.bootstrapTable('refreshOptions', {
+                exportDataType: $(this).val(),
+                pageList: [5, 10, 20],
+                filterControl: true,
+                columns: [
+                    { field: 'name', title: 'Name', sortable: true },
+                    { field: 'dateOfBirth', title: 'Date of Birth', sortable: true },
+                    { field: 'married', title: 'Married', sortable: true },
+                    { field: 'phone', title: 'Phone', sortable: true },
+                    { field: 'salary', title: 'Salary', sortable: true }
+                ]
+            });
+        });
+    })
+
+    const $toolbar = $('#toolbar');
+    $toolbar.find('select').change(function () {
+        $table.bootstrapTable('refreshOptions', {
+            exportDataType: $(this).val()
+        });
+    });
+
+    const trBoldBlue = $("table");
+    $(trBoldBlue).on("click", "tr", function (){
+            $(this).toggleClass("bold-blue");
+    });
+</script>
